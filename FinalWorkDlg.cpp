@@ -59,18 +59,17 @@ CFinalWorkDlg::CFinalWorkDlg(CWnd* pParent /*=nullptr*/)
 void CFinalWorkDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
-	DDX_Control(pDX, IDC_Picture1, m_p1);
-	DDX_Control(pDX, IDC_Picture2, m_p2);
 	DDX_Control(pDX, IDC_COMBO1, m_combo);
+	DDX_Control(pDX, IDC_LIST1, m_list);
 }
 
 BEGIN_MESSAGE_MAP(CFinalWorkDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-	ON_BN_CLICKED(IDC_BUTTON1, &CFinalWorkDlg::OnBnClickedButton1)
-	ON_CBN_SELCHANGE(IDC_COMBO1, &CFinalWorkDlg::OnCbnSelchangeCombo1)
-	ON_BN_CLICKED(IDC_BUTTON3, &CFinalWorkDlg::OnBnClickedButton3)
+	ON_BN_CLICKED(IDC_BUTTON1, &CFinalWorkDlg::AddPicture)
+	ON_BN_CLICKED(IDC_BUTTON3, &CFinalWorkDlg::BeginProcess)
+	ON_MESSAGE(WM_UPDATE_LISTBOX, &CFinalWorkDlg::OnUpdateListBox)
 END_MESSAGE_MAP()
 
 
@@ -111,6 +110,7 @@ BOOL CFinalWorkDlg::OnInitDialog()
 	m_combo.InsertString(2, _T("缩小至50%"));
 	m_combo.InsertString(3, _T("顺时针旋转"));
 	m_combo.InsertString(4, _T("逆时针旋转"));
+	m_combo.InsertString(5, _T("人脸检测"));
 
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
@@ -165,9 +165,22 @@ HCURSOR CFinalWorkDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+LRESULT CFinalWorkDlg::OnUpdateListBox(WPARAM wParam, LPARAM lParam)
+{
+	int index = (int)wParam;
+	CString status = m_imageList[index].status;
 
+	// 更新ListBox中的状态
+	CString displayText;
+	displayText.Format(_T("%s - %s"), m_imageList[index].filePath, status);
 
-void CFinalWorkDlg::OnBnClickedButton1()
+	// 更新ListBox中相应行的文本
+	m_list.DeleteString(index);
+	m_list.InsertString(index, displayText);
+	return 0;
+}
+
+void CFinalWorkDlg::AddPicture()
 {
 	CString fileName;
 	TCHAR szFilter[] = _T("JPEG文件(*.jpg)|*.jpg|PNG文件(*.png)|*.png|GIF文件(*.gif)|*.gif|bmp文件(*.bmp)|*.bmp||");
@@ -178,6 +191,7 @@ void CFinalWorkDlg::OnBnClickedButton1()
 
 	fileName = fileDlg.GetPathName();
 
+	/*
 	CImage img;
 	img.Load(fileName);
 	CRect rect;
@@ -190,6 +204,8 @@ void CFinalWorkDlg::OnBnClickedButton1()
 	img.StretchBlt(pDC->m_hDC, rect, SRCCOPY);//从源矩形中复制一个位图到目标矩形，按目标设备设置的模式进行图像的拉伸或压缩
 	SetStretchBltMode(pDC->m_hDC, oldMode);
 	ReleaseDC(pDC);
+	*/
+
 	/*
 	m_p1.GetClientRect(rect);
 	CDC* pDc = m_p1.GetDC();
@@ -198,74 +214,101 @@ void CFinalWorkDlg::OnBnClickedButton1()
 	m_p1.ReleaseDC(pDc);
 	*/
 
-	src = imread(fileName.GetBuffer(), 1);
+	//src = imread(fileName.GetBuffer(), 1);
+
+	ImageInfo info;
+	info.filePath = fileName;
+	info.status = _T("[待处理]");
+	m_imageList.Add(info);
+	CString text;
+	text.Format(_T("%s - %s"), fileName, info.status);
+	m_list.AddString(text);
+
+	//m_list.AddString(_T(fileName + "[待处理]"));
 }
 
-void CFinalWorkDlg::ShowResult(CString src)
-{
-	CImage img;
-	img.Load(TEXT(src));
-	CRect rect;
-	CWnd* pWnd = GetDlgItem(IDC_Picture2);//获取控件句柄		
-	pWnd->GetClientRect(&rect); //获取Picture Control控件的客户区
-
-	CDC* pDC = pWnd->GetDC();//获取picture control的DC
-	  
-	int oldMode = SetStretchBltMode(pDC->m_hDC, STRETCH_HALFTONE);//设置指定设备环境中的位图拉伸模式		
-	img.StretchBlt(pDC->m_hDC, rect, SRCCOPY);//从源矩形中复制一个位图到目标矩形，按目标设备设置的模式进行图像的拉伸或压缩
-	SetStretchBltMode(pDC->m_hDC, oldMode);
-	ReleaseDC(pDC);
-}
-
-
-
-void CFinalWorkDlg::OnCbnSelchangeCombo1()
+void CFinalWorkDlg::BeginProcess()
 {
 	// TODO: 在此添加控件通知处理程序代码
+	int index1 = m_combo.GetCurSel();
+	int index2 = m_list.GetCurSel();
+	CString path = m_imageList[index2].filePath;
+	ThreadParams* params = new ThreadParams{index1, path };
+	AfxBeginThread(ProcessImageThread, params);
+	m_imageList[index2].status = _T("[已处理]");
+	AfxGetMainWnd()->PostMessage(WM_UPDATE_LISTBOX, index2, 0);
 
 }
 
-
-void CFinalWorkDlg::OnBnClickedButton3()
+UINT CFinalWorkDlg::ProcessImageThread(LPVOID pParam)
 {
-	// TODO: 在此添加控件通知处理程序代码
-	int index = m_combo.GetCurSel();
-	
+	ThreadParams* p = (ThreadParams*)pParam;
+	int index = p->comboIndex;
+	CString path = p->path;
+	int pos1 = path.Find('C');
+	int pos2 = path.Find('.');
+	CString subRstPath = path.Mid(pos1, pos2 - pos1);
+	delete p;
+	CString rstPath;
+	rstPath.Format("%sresult.png", subRstPath);
+	Mat src = imread(path.GetBuffer(), 1);
+	Mat result;
+	CFinalWorkDlg dlg;
 	switch (index)
 	{
 	case 0:
-		result = imageProcess.RGB_To_Gray(src);
-		imwrite("result.png", result);
-		//ShowResult("result.png");
+		result = dlg.imageProcess.RGB_To_Gray(src);
+		imwrite(rstPath.GetBuffer(), result);
+		/*
 		namedWindow("src", WINDOW_NORMAL);
 		namedWindow("result", WINDOW_NORMAL);
 		resizeWindow("src", 1600, 900);
 		resizeWindow("result", 1600, 900);
 		imshow("src", src);
 		imshow("result", result);
+		*/
 		break;
 	case 1:
-		result = imageProcess.Resize_To_200(src);
-		imwrite("result1.png", result);
-		ShowResult("result1.png");
+		result = dlg.imageProcess.Resize_To_200(src);
+		imwrite(rstPath.GetBuffer(), result);
 		break;
 	case 2:
-		result = imageProcess.Resize_To_50(src);
-		imwrite("result2.png", result);
-		ShowResult("result2.png");
+		result = dlg.imageProcess.Resize_To_50(src);
+		imwrite(rstPath.GetBuffer(), result);
 		break;
 	case 3:
-		result = imageProcess.Rotate_Clockwise_90(src);
-		imwrite("result3.png", result);
-		ShowResult("result3.png");
+		result = dlg.imageProcess.Rotate_Clockwise_90(src);
+		imwrite(rstPath.GetBuffer(), result);
 		break;
 	case 4:
-		result = imageProcess.Rotate_Counterclockwise_90(src);
-		imwrite("result4.png", result);
-		ShowResult("result4.png");
+		result = dlg.imageProcess.Rotate_Counterclockwise_90(src);
+		imwrite(rstPath.GetBuffer(), result);
+		break;
+	case 5:
+		result = dlg.imageProcess.Detect_Face(src);
+		imwrite(rstPath.GetBuffer(), result);
 		break;
 	default:
 		break;
 	}
+
+	return 0;
 }
 
+/*
+void CFinalWorkDlg::ShowResult(CString src)
+{
+	CImage img;
+	img.Load(TEXT(src));
+	CRect rect;
+	CWnd* pWnd = GetDlgItem(IDC_Picture2);//获取控件句柄
+	pWnd->GetClientRect(&rect); //获取Picture Control控件的客户区
+
+	CDC* pDC = pWnd->GetDC();//获取picture control的DC
+
+	int oldMode = SetStretchBltMode(pDC->m_hDC, STRETCH_HALFTONE);//设置指定设备环境中的位图拉伸模式
+	img.StretchBlt(pDC->m_hDC, rect, SRCCOPY);//从源矩形中复制一个位图到目标矩形，按目标设备设置的模式进行图像的拉伸或压缩
+	SetStretchBltMode(pDC->m_hDC, oldMode);
+	ReleaseDC(pDC);
+}
+*/

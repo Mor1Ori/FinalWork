@@ -7,5 +7,6 @@ public:
 	Mat Resize_To_50(Mat src);
 	Mat Rotate_Clockwise_90(Mat src);
 	Mat Rotate_Counterclockwise_90(Mat src);
+	Mat Detect_Face(Mat src);
 };
 

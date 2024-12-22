@@ -3,6 +3,7 @@
 //
 #include "CImageProcess.h"
 #pragma once
+#define WM_UPDATE_LISTBOX (WM_USER + 100)
 
 
 // CFinalWorkDlg 对话框
@@ -11,7 +12,7 @@ class CFinalWorkDlg : public CDialogEx
 // 构造
 public:
 	CFinalWorkDlg(CWnd* pParent = nullptr);	// 标准构造函数
-
+	LRESULT OnUpdateListBox(WPARAM wParam, LPARAM lParam);
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_FINALWORK_DIALOG };
@@ -30,16 +31,32 @@ protected:
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
+
 	DECLARE_MESSAGE_MAP()
 public:
-	CStatic m_p1;
-	CStatic m_p2;
-	Mat src;
-	Mat result;
-	void ShowResult(CString src);
-	afx_msg void OnBnClickedButton1();
+	
+	afx_msg void AddPicture();
 	CImageProcess imageProcess;
-	afx_msg void OnCbnSelchangeCombo1();
 	CComboBox m_combo;
-	afx_msg void OnBnClickedButton3();
+	afx_msg void BeginProcess();
+	CListBox m_list;
+
+	struct ImageInfo
+	{
+		CString filePath;
+		CString status;
+	};
+	CArray<ImageInfo, ImageInfo&> m_imageList;
+
+	static UINT ProcessImageThread(LPVOID pParam);
+
+
+
+	struct ThreadParams
+	{
+		//Mat src;
+		//Mat result;
+		int comboIndex;
+		CString path;
+	};
 };

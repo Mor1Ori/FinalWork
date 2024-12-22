@@ -89,3 +89,35 @@ Mat CImageProcess::Rotate_Counterclockwise_90(Mat src)
 
     return result;
 }
+
+Mat CImageProcess::Detect_Face(Mat src)
+{
+    // 建立级联分类器
+    CascadeClassifier cascade;
+    // 加载训练好的 人脸检测器（.xml）
+    //注意路径问题，当前目录的上一个目录中的xml文件夹下
+    const string path = "C:\\Users\\16252\\Desktop\\Windows\\FinalWork\\xml\\haarcascade_frontalface_alt.xml";
+    if (!cascade.load(path))
+    {
+        AfxMessageBox(TEXT("图像加载错误！"));
+    }
+
+    //计时
+    double t = 0;
+    t = (double)getTickCount();
+   
+    vector<Rect> faces(0);
+    cascade.detectMultiScale(src, faces, 1.1, 2, 0, Size(30, 30));
+
+
+    if (faces.size() > 0)
+    {
+        for (size_t i = 0; i < faces.size(); i++)
+        {
+            rectangle(src, faces[i], Scalar(150, 0, 0), 3, 8, 0);
+
+        }
+    }
+    else AfxMessageBox(TEXT("未检测到人脸"));
+    return src;
+}
