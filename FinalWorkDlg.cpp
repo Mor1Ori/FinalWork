@@ -70,6 +70,9 @@ BEGIN_MESSAGE_MAP(CFinalWorkDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON1, &CFinalWorkDlg::AddPicture)
 	ON_BN_CLICKED(IDC_BUTTON3, &CFinalWorkDlg::BeginProcess)
 	ON_MESSAGE(WM_UPDATE_LISTBOX, &CFinalWorkDlg::OnUpdateListBox)
+	ON_BN_CLICKED(IDC_BUTTON2, &CFinalWorkDlg::ShowResult)
+	ON_BN_CLICKED(IDC_BUTTON4, &CFinalWorkDlg::CancelProcess)
+	ON_BN_CLICKED(IDC_BUTTON5, &CFinalWorkDlg::DeleteImg)
 END_MESSAGE_MAP()
 
 
@@ -111,6 +114,8 @@ BOOL CFinalWorkDlg::OnInitDialog()
 	m_combo.InsertString(3, _T("顺时针旋转"));
 	m_combo.InsertString(4, _T("逆时针旋转"));
 	m_combo.InsertString(5, _T("人脸检测"));
+	m_combo.InsertString(6, _T("边缘检测"));
+	m_combo.InsertString(7, _T("图像滤波"));
 
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
@@ -191,31 +196,6 @@ void CFinalWorkDlg::AddPicture()
 
 	fileName = fileDlg.GetPathName();
 
-	/*
-	CImage img;
-	img.Load(fileName);
-	CRect rect;
-	CWnd* pWnd = GetDlgItem(IDC_Picture1);//获取控件句柄		
-	pWnd->GetClientRect(&rect); //获取Picture Control控件的客户区
-
-	CDC* pDC = pWnd->GetDC();//获取picture control的DC
-
-	int oldMode = SetStretchBltMode(pDC->m_hDC, STRETCH_HALFTONE);//设置指定设备环境中的位图拉伸模式		
-	img.StretchBlt(pDC->m_hDC, rect, SRCCOPY);//从源矩形中复制一个位图到目标矩形，按目标设备设置的模式进行图像的拉伸或压缩
-	SetStretchBltMode(pDC->m_hDC, oldMode);
-	ReleaseDC(pDC);
-	*/
-
-	/*
-	m_p1.GetClientRect(rect);
-	CDC* pDc = m_p1.GetDC();
-	img.Draw(pDc->m_hDC, rect);
-	img.Destroy();
-	m_p1.ReleaseDC(pDc);
-	*/
-
-	//src = imread(fileName.GetBuffer(), 1);
-
 	ImageInfo info;
 	info.filePath = fileName;
 	info.status = _T("[待处理]");
@@ -223,31 +203,49 @@ void CFinalWorkDlg::AddPicture()
 	CString text;
 	text.Format(_T("%s - %s"), fileName, info.status);
 	m_list.AddString(text);
-
-	//m_list.AddString(_T(fileName + "[待处理]"));
 }
 
 void CFinalWorkDlg::BeginProcess()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	int index1 = m_combo.GetCurSel();
-	int index2 = m_list.GetCurSel();
-	CString path = m_imageList[index2].filePath;
-	ThreadParams* params = new ThreadParams{index1, path };
-	AfxBeginThread(ProcessImageThread, params);
-	m_imageList[index2].status = _T("[已处理]");
-	AfxGetMainWnd()->PostMessage(WM_UPDATE_LISTBOX, index2, 0);
+	if (m_list.GetCurSel() == LB_ERR)
+	{
+		AfxMessageBox("请选择列表中的一项 ");
+	}
+	else if (m_combo.GetCurSel() == LB_ERR)
+	{
+		AfxMessageBox("请选择一种处理方式");
+	}
+	else
+	{
+		int index1 = m_combo.GetCurSel();
+		int index2 = m_list.GetCurSel();
+		CString path = m_imageList[index2].filePath;
+		CString status = m_imageList[index2].status;
+		if (status == _T("[已取消处理]"))
+		{
+			AfxMessageBox("该项已被取消");
+		}
+		else
+		{
+			ThreadParams* params = new ThreadParams{ index1, path };
+			AfxBeginThread(ProcessImageThread, params);
+			m_imageList[index2].status = _T("[已处理]");
+			AfxGetMainWnd()->PostMessage(WM_UPDATE_LISTBOX, index2, 0);
+		}
+	}
 
+	
 }
+
 
 UINT CFinalWorkDlg::ProcessImageThread(LPVOID pParam)
 {
 	ThreadParams* p = (ThreadParams*)pParam;
 	int index = p->comboIndex;
 	CString path = p->path;
-	int pos1 = path.Find('C');
-	int pos2 = path.Find('.');
-	CString subRstPath = path.Mid(pos1, pos2 - pos1);
+	int pos = path.Find('.');
+	CString subRstPath = path.Left(pos);
 	delete p;
 	CString rstPath;
 	rstPath.Format("%sresult.png", subRstPath);
@@ -259,14 +257,6 @@ UINT CFinalWorkDlg::ProcessImageThread(LPVOID pParam)
 	case 0:
 		result = dlg.imageProcess.RGB_To_Gray(src);
 		imwrite(rstPath.GetBuffer(), result);
-		/*
-		namedWindow("src", WINDOW_NORMAL);
-		namedWindow("result", WINDOW_NORMAL);
-		resizeWindow("src", 1600, 900);
-		resizeWindow("result", 1600, 900);
-		imshow("src", src);
-		imshow("result", result);
-		*/
 		break;
 	case 1:
 		result = dlg.imageProcess.Resize_To_200(src);
@@ -288,11 +278,58 @@ UINT CFinalWorkDlg::ProcessImageThread(LPVOID pParam)
 		result = dlg.imageProcess.Detect_Face(src);
 		imwrite(rstPath.GetBuffer(), result);
 		break;
+	case 6:
+		result = dlg.imageProcess.Edge_Detect(src);
+		imwrite(rstPath.GetBuffer(), result);
+		break;
+	case 7:
+		result = dlg.imageProcess.Gaussian_Blur(src);
+		imwrite(rstPath.GetBuffer(), result);
+		break;
 	default:
 		break;
 	}
 
 	return 0;
+}
+
+
+void CFinalWorkDlg::ShowResult()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (m_list.GetCurSel() == LB_ERR)
+	{
+		AfxMessageBox("请选择列表中的一项");
+	}
+	else
+	{
+		int index = m_list.GetCurSel();
+		CString status = m_imageList[index].status;
+		if (status != _T("[已处理]"))
+		{
+			AfxMessageBox("该项未被处理");
+		}
+		else
+		{
+			CString src = m_imageList[index].filePath;
+			CString result;
+			int pos = src.Find('.');
+			CString subRstPath = src.Left(pos);
+			result.Format("%sresult.png", subRstPath);
+
+			Mat srcc = imread(src.GetBuffer(), 1);
+			Mat rst = imread(result.GetBuffer(), 1);
+
+			
+			namedWindow("src", WINDOW_NORMAL);
+			namedWindow("result", WINDOW_NORMAL);
+			resizeWindow("src", srcc.cols, srcc.rows);
+			resizeWindow("result", rst.cols, rst.rows);
+			imshow("src", srcc);
+			imshow("result", rst);
+		}
+	}
+	
 }
 
 /*
@@ -312,3 +349,52 @@ void CFinalWorkDlg::ShowResult(CString src)
 	ReleaseDC(pDC);
 }
 */
+
+void CFinalWorkDlg::CancelProcess()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (m_list.GetCurSel() == LB_ERR)
+	{
+		AfxMessageBox("请选择列表中的一项");
+	}
+	else
+	{
+		int index = m_list.GetCurSel();
+		m_imageList[index].status = _T("[已取消处理]");
+		AfxGetMainWnd()->PostMessage(WM_UPDATE_LISTBOX, index, 0);
+	}
+}
+
+
+void CFinalWorkDlg::DeleteImg()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (m_list.GetCurSel() == LB_ERR)
+	{
+		AfxMessageBox("请选择列表中的一项");
+	}
+	else
+	{
+		int index = m_list.GetCurSel();
+		CString status = m_imageList[index].status;
+		if (status != _T("[已处理]"))
+		{
+			AfxMessageBox("该项未被处理");
+		}
+		else
+		{
+			CString src = m_imageList[index].filePath;
+			CString dltpath;
+			int pos = src.Find('.');
+			CString subRstPath = src.Left(pos);
+			dltpath.Format("%sresult.png", subRstPath);
+			if (DeleteFile(dltpath))
+			{
+				AfxMessageBox(_T("文件删除成功"));
+			}
+			m_list.DeleteString(index);
+			m_imageList.RemoveAt(index);
+		}
+
+	}
+}

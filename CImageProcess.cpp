@@ -121,3 +121,41 @@ Mat CImageProcess::Detect_Face(Mat src)
     else AfxMessageBox(TEXT("未检测到人脸"));
     return src;
 }
+
+Mat CImageProcess::Edge_Detect(Mat src)
+{
+    Mat result;
+    // 转换为灰度图像（如果输入是彩色图像）
+    if (src.channels() == 3) {
+        cvtColor(src, result, COLOR_BGR2GRAY);
+    }
+    else {
+        result = src.clone();
+    }
+
+    // 定义Sobel的卷积核参数，分别计算水平和垂直方向的梯度
+    Mat gradX, gradY;
+    Mat absGradX, absGradY;
+
+    // 计算X方向的梯度（Sobel算子的1阶导数）
+    Sobel(result, gradX, CV_16S, 1, 0, 3);
+    // 计算Y方向的梯度
+    Sobel(result, gradY, CV_16S, 0, 1, 3);
+
+    // 计算梯度的绝对值
+    convertScaleAbs(gradX, absGradX);
+    convertScaleAbs(gradY, absGradY);
+
+    // 合并X和Y方向的梯度
+    addWeighted(absGradX, 0.5, absGradY, 0.5, 0, result);
+    return result;
+}
+
+Mat CImageProcess::Gaussian_Blur(Mat src)
+{
+    Mat result;
+    int kernelSize = 5;    // 高斯核的大小
+    double sigmaX = 1.5;   // X方向的标准差
+    GaussianBlur(src, result, cv::Size(kernelSize, kernelSize), sigmaX);
+    return result;
+}

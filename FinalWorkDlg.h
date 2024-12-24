@@ -41,6 +41,7 @@ public:
 	afx_msg void BeginProcess();
 	CListBox m_list;
 
+
 	struct ImageInfo
 	{
 		CString filePath;
@@ -59,4 +60,7 @@ public:
 		int comboIndex;
 		CString path;
 	};
+	afx_msg void ShowResult();
+	afx_msg void CancelProcess();
+	afx_msg void DeleteImg();
 };
